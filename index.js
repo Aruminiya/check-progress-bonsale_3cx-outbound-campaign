@@ -104,7 +104,7 @@ function formatProgress(list) {
 async function fetchProgress(mode = 'regular') {
   const debtCollectionFlow = await getDebtCollectionFlow(PROJECT_ID);
   const { totalUnDialed, message } = formatProgress(debtCollectionFlow);
-
+  console.log(`取得進度資料，mode=${mode}，totalUnDialed=${totalUnDialed}`);
   const extraMessage = (totalUnDialed) => {
     if (mode === 'final') {
       if (totalUnDialed === 0) {
@@ -115,7 +115,9 @@ async function fetchProgress(mode = 'regular') {
     }
 
     if (mode === 'regular') {
-      if (totalUnDialed > 0 && totalUnDialed <= 3000) {
+      if (totalUnDialed === 0) {
+        return '名單數量已經全部撥打完畢了，太棒了，準備要好好睡一覺了 ☺️ ☺️ ☺️';
+      } else if (totalUnDialed > 0 && totalUnDialed <= 3000) {
         return '檢查名單數量還算正常，今天應該可以好好睡覺了 ☺️ ☺️ ☺️';
       } else if (totalUnDialed > 3000 && totalUnDialed <= 4000) {
         return '檢查名單數量有點多，晚上睡前檢查並需注意撥打完沒 😳 😳 😳';
@@ -150,7 +152,8 @@ async function sendScheduledCheck(mode) {
 // 2. 等待 20 分鐘後重新啟動，避免暫存名單殘留造成問題
 async function handleEveningFollowUp(debtCollectionFlow, totalUnDialed) {
   if (totalUnDialed === 0) return;
-  console.log(`最後檢查發現待撥名單數量為 ${totalUnDialed}，準備進行後續處理...`);
+  console.log('最後檢查發現仍有待撥名單，開始進行後續處理...');
+  console.log(`最後檢查發現待撥名單數量為 ${totalUnDialed}`);
 
   for (const projectId of PROJECT_ID) {
     console.log(`正在停止專案 ${projectId} 的自動外撥...`);
@@ -208,10 +211,14 @@ client.on('interactionCreate', async (interaction) => {
 
   if (!isCheckCommand && !isCheckButton) return;
 
-  // deferReply 避免 Discord 3 秒逾時，實際回應用 editReply
-  await interaction.deferReply();
-  const { content } = await fetchProgress('regular');
-  await interaction.editReply({ content, components: [checkButton] });
+  try {
+    // deferReply 避免 Discord 3 秒逾時，實際回應用 editReply
+    await interaction.deferReply();
+    const { content } = await fetchProgress('regular');
+    await interaction.editReply({ content, components: [checkButton] });
+  } catch (err) {
+    console.error('處理互動時發生錯誤：', err.message);
+  }
 });
 
 // ========== 排程設定 ==========
