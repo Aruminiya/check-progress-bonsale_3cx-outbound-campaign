@@ -4,9 +4,10 @@
 
 ## 功能
 
-- 每天早上 09:30 拉取指定專案的待撥名單數量，發送進度報告至 Discord
-- 每天晚上 21:30 再次檢查，若仍有待撥名單，自動停止外撥並於 20 分鐘後重新啟動（待 API 就緒後啟用）
-- 排程時間可透過環境變數調整
+- 依照 `SCHEDULE` 設定的時段，定時拉取指定專案的待撥名單數量並發送進度報告至 Discord
+- 最後一個時段若仍有待撥名單，自動停止外撥並於 20 分鐘後重新啟動
+- Discord Bot 常駐，支援 `/check` Slash Command 與訊息按鈕即時查詢進度
+- Bot 上線／離線時自動發送通知至 Discord 頻道
 
 ## 環境變數
 
@@ -19,10 +20,19 @@
 | `BONSALE_X_API_SECRET` | Bonsale API Secret |
 | `BONSALE_PROJECT_ID` | 監控的專案 ID，多個以逗號分隔 |
 | `BONSLAE_3CX_OUTBOUND_CAMPAIGN_HOST` | 3CX Outbound Campaign API 位址 |
-| `SCHEDULE_MORNING` | 早上檢查時間，格式 `HH:MM`，預設 `09:30` |
-| `SCHEDULE_EVENING` | 晚上檢查時間，格式 `HH:MM`，預設 `21:30` |
+| `SCHEDULE` | 排程時段，格式 `HH:MM`，多個以逗號分隔，**最後一個時段**為最終檢查模式（例：`09:30,21:50`） |
+| `TIMEZONE` | 時區，預設 `Asia/Taipei` |
 | `DISCORD_BOT_TOKEN` | Discord Bot Token |
 | `DISCORD_CHANNEL_ID` | 發送通知的頻道 ID |
+| `DISCORD_GUILD_ID` | Discord 伺服器 ID（用於註冊 Slash Command） |
+
+## Discord Bot 設定
+
+在 [Discord Developer Portal](https://discord.com/developers/applications) 確認以下設定：
+
+- **Privileged Gateway Intents**：開啟 `MESSAGE CONTENT INTENT`
+- **OAuth2 Scopes**：`bot` + `applications.commands`
+- **Bot Permissions**：`Send Messages`、`Read Message History`、`View Channels`、`Use Slash Commands`
 
 ## 本地執行
 
@@ -46,10 +56,8 @@ docker push gcr.io/drvet-server-sysstore-bonvies/check-progress-21-crideit:lates
 
 > 若 3CX Outbound Campaign 服務與 container 同機執行，`BONSLAE_3CX_OUTBOUND_CAMPAIGN_HOST` 請設為 `http://host.docker.internal:<port>`
 
-## 晚上自動處理流程（待啟用）
+## 最後時段自動處理流程
 
-1. 晚上排程觸發，取得各專案待撥數量
+1. 最後一個排程時段觸發，取得各專案待撥數量
 2. 若 `totalUnDialed > 0`，依序停止每個專案的自動外撥（間隔 3 秒）
 3. 等待 20 分鐘後，重新啟動各專案的自動外撥（間隔 3 秒）
-
-> 目前此流程已寫好但暫時註解，等 `bonsale_3cx-outbound-campaign` API 版本就緒後再開啟
