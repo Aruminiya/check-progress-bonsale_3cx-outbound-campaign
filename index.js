@@ -18,12 +18,7 @@ const axiosBonsaleInstance = axios.create({
 });
 
 const PROJECT_ID = process.env.BONSALE_PROJECT_ID.split(',').map(id => id.trim());
-
-function parseTime(envKey, fallback) {
-  const raw = process.env[envKey] || fallback;
-  const [hour, minute] = raw.split(':').map(Number);
-  return { hour, minute };
-}
+const TIMEZONE = process.env.TIMEZONE || 'Asia/Taipei';
 
 // 取得 21 世紀 專案自動外撥的撥打進度
 async function getDebtCollectionFlow(PROJECT_ID) {
@@ -53,9 +48,7 @@ function formatProgress(list) {
 
   const totalUnDialed = list.reduce((sum, item) => sum + item.unDialedCount, 0);
   lines.push(`\n總撥號名單數量 : ${totalUnDialed}`);
-
   lines.push(`\n檢測時間 : ${new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}`);
-
   lines.push('\n==================================');
 
   return {
@@ -64,26 +57,26 @@ function formatProgress(list) {
   };
 }
 
-async function getDataToDiscord(mode = 'morning') {
+async function getDataToDiscord(mode = 'regular') {
   const debtCollectionFlow = await getDebtCollectionFlow(PROJECT_ID);
   const { totalUnDialed, message } = formatProgress(debtCollectionFlow);
 
   const extraMessage = (totalUnDialed) => {
-    if (mode === 'evening') {
+    if (mode === 'final') {
       if (totalUnDialed === 0) {
-        return '晚上檢查完畢，名單數量已經全部撥打完畢了，太棒了，準備要好好睡一覺了 ☺️ ☺️ ☺️';
+        return '最後檢查完畢，名單數量已經全部撥打完畢了，太棒了，準備要好好睡一覺了 ☺️ ☺️ ☺️';
       } else {
-        return '晚上檢查完畢，名單數量仍然沒打完，準備要停止撥號 以免暫存名單存留導致出問題 😱 😱 😱';
+        return '最後檢查完畢，名單數量仍然沒打完，準備要停止撥號 以免暫存名單存留導致出問題 😱 😱 😱';
       }
     }
 
-    if (mode === 'morning') {
+    if (mode === 'regular') {
       if (totalUnDialed > 0 && totalUnDialed <= 3000) {
-        return '今天名單數量還算正常，今天應該可以好好睡覺了 ☺️ ☺️ ☺️';
+        return '檢查名單數量還算正常，今天應該可以好好睡覺了 ☺️ ☺️ ☺️';
       } else if (totalUnDialed > 3000 && totalUnDialed <= 4000) {
-        return '今天名單數量有點多，晚上睡前檢查並需注意撥打完沒 😳 😳 😳';
+        return '檢查名單數量有點多，晚上睡前檢查並需注意撥打完沒 😳 😳 😳';
       } else if (totalUnDialed > 4000) {
-        return '今天名單數量太多了，晚上睡前要做好心理準備了 😱 😱 😱';
+        return '檢查名單數量太多了，晚上睡前要做好心理準備了 😱 😱 😱';
       } else {
         return '未知的名單數量，請確認 API 回傳資料是否正確 ❌ ❌ ❌';
       }
@@ -106,7 +99,7 @@ async function getDataToDiscord(mode = 'morning') {
 
 async function handleEveningFollowUp(debtCollectionFlow, totalUnDialed) {
   if (totalUnDialed === 0) return;
-  console.log(`晚上檢查發現待撥名單數量為 ${totalUnDialed}，準備進行後續處理...`);
+  console.log(`最後檢查發現待撥名單數量為 ${totalUnDialed}，準備進行後續處理...`);
 
   for (const projectId of PROJECT_ID) {
     console.log(`正在停止專案 ${projectId} 的自動外撥...`);
@@ -125,24 +118,43 @@ async function handleEveningFollowUp(debtCollectionFlow, totalUnDialed) {
 }
 
 function main() {
-  const morning = parseTime('SCHEDULE_MORNING', '09:30');
-  const evening = parseTime('SCHEDULE_EVENING', '21:30');
+  if (!process.env.SCHEDULE) {
+    console.error('錯誤：環境變數 SCHEDULE 未設定，請在 .env 中設定（格式範例：09:30,21:50）');
+    process.exit(1);
+  }
 
-  schedule.scheduleJob({ ...morning, tz: 'Asia/Taipei' }, async () => {
-    console.log(`[早上 ${process.env.SCHEDULE_MORNING || '09:30'}] 開始檢查...`);
-    await getDataToDiscord('morning'  );
+  const timeRegex = /^([01]\d|2[0-3]):[0-5]\d$/;
+  const times = process.env.SCHEDULE.split(',').map(s => s.trim()).filter(Boolean);
+  const invalid = times.filter(t => !timeRegex.test(t));
+
+  if (times.length === 0) {
+    console.error('錯誤：SCHEDULE 未包含任何時間');
+    process.exit(1);
+  }
+
+  if (invalid.length > 0) {
+    console.error(`錯誤：SCHEDULE 包含格式不正確的時間：${invalid.join(', ')}（正確格式：HH:MM，例如 09:30）`);
+    process.exit(1);
+  }
+
+  times.forEach((timeStr, index) => {
+    const isLast = index === times.length - 1;
+    const [hour, minute] = timeStr.split(':').map(Number);
+
+    schedule.scheduleJob({ hour, minute, tz: TIMEZONE }, async () => {
+      console.log(`[${timeStr}] 開始檢查...`);
+      if (isLast) {
+        const { debtCollectionFlow, totalUnDialed } = await getDataToDiscord('final');
+        if (totalUnDialed > 0) {
+          await handleEveningFollowUp(debtCollectionFlow, totalUnDialed);
+        }
+      } else {
+        await getDataToDiscord('regular');
+      }
+    });
   });
 
-  schedule.scheduleJob({ ...evening, tz: 'Asia/Taipei' }, async () => {
-    console.log(`[晚上 ${process.env.SCHEDULE_EVENING || '21:30'}] 開始檢查...`);
-    const { debtCollectionFlow, totalUnDialed } = await getDataToDiscord('evening');
-    if (totalUnDialed > 0) {
-      // TODO 等到 bonsale_3cx-outbound-campaign 的 API 都做好並且版本支援之後再來補上後續的處理
-      // await handleEveningFollowUp(debtCollectionFlow, totalUnDialed);
-    }
-  });
-
-  console.log(`排程已啟動，等待執行 (${process.env.SCHEDULE_MORNING || '09:30'} / ${process.env.SCHEDULE_EVENING || '21:30'})`);
+  console.log(`排程已啟動，等待執行 (${times.join(' / ')})`);
 }
 
 main();
