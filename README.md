@@ -1,6 +1,7 @@
-# check-progress-21-crideit-outbound-campaign
+# check-progress-bonsale_3cx-outbound-campaign
 
-監控 21 世紀信貸催收 Flow 自動外撥進度，並透過排程定時發送 Discord 通知。
+監控 Bonsale 自動外撥進度，並透過排程定時發送 Discord 通知。
+最後排程時間判斷有無撥打完成來決定要不要停止外播。
 
 ## 功能
 
