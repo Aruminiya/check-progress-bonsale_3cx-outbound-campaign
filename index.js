@@ -119,7 +119,7 @@ async function handleEveningFollowUp(debtCollectionFlow, totalUnDialed) {
       await notify('info', `已停止自動外撥，20 分鐘後自動重新啟動`);
     } catch (err) {
       console.warn(`停止專案 ${project.projectId} 時發生錯誤（可能已停止）：`, err.response?.data?.message ?? err.message);
-      await notify('error', `停止專案 ${project.projectId} 的自動外撥時發生錯誤：${err.response?.data?.message ?? err.message}`);
+      await notify('error', ` 停止專案 ${project.projectId} 的自動外撥時發生錯誤：${err.response?.data?.message ?? err.message}`);
     }
     await new Promise(resolve => setTimeout(resolve, 3000)); // 每個專案操作間隔 3 秒，避免對 API 造成過大壓力
   }
@@ -152,9 +152,7 @@ function setupSchedule() {
       console.log(`[${timeStr}] 開始檢查...`);
       if (isLast) { // 最後一個排程時段，執行完檢查後如果有待撥名單則進行後續處理
         const { debtCollectionFlow, totalUnDialed } = await sendScheduledCheck('final');
-        if (totalUnDialed > 0) {
-          await handleEveningFollowUp(debtCollectionFlow, totalUnDialed);
-        }
+        await handleEveningFollowUp(debtCollectionFlow, totalUnDialed);
       } else {
         await sendScheduledCheck('regular');
       }

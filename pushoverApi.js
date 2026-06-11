@@ -20,7 +20,11 @@ export function sendPushoverNotification(level = 'info', message, { url = null, 
   const data = {
     token: process.env.PUSHOVER_API_TOKEN,
     user: process.env.PUSHOVER_USER_KEY,
-    message,
+    message: level === 'silent' ? `📋 ${message}` :
+             level === 'info' ? `🍏 ${message}` :
+             level === 'warning' ? `🟡 ${message}` :
+             level === 'error' ? `🚨 ${message}` :
+             message,
     ...config,
   };
 
